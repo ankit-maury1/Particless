@@ -3,26 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hand Magic Particles</title>
+    <title>Pro Hand Particles Mobile</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        #info {
-            position: absolute; top: 15px; left: 15px; color: #0ff;
-            background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px;
-            pointer-events: none; z-index: 10; font-size: 14px;
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #ui {
+            position: absolute; top: 10px; left: 10px; color: #0ff;
+            background: rgba(0,0,0,0.5); padding: 8px; border-radius: 5px;
+            font-size: 12px; pointer-events: none; z-index: 100;
         }
-        #status { color: #fff; font-weight: bold; }
-        canvas { display: block; touch-action: none; }
-        /* Hidden video for tracking */
-        #input_video { display: none; }
+        #video_container { position: absolute; bottom: 10px; right: 10px; width: 100px; height: 75px; border: 2px solid #0ff; border-radius: 5px; overflow: hidden; transform: scaleX(-1); }
+        video { width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
 <body>
-    <div id="info">
-        <div id="status">Models Load Ho Rahe Hain...</div>
-        <div style="font-size: 11px; margin-top: 5px;">Pinch (Fingers milayein) - Burst Effect</div>
+    <div id="ui">
+        <div id="status">Models loading...</div>
+        <div id="shape_name">Shape: Sphere</div>
     </div>
-    <video id="input_video"></video>
+    
+    <div id="video_container">
+        <video id="input_video"></video>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -33,269 +34,155 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // 1. Mobile vs Desktop Optimization
+        // --- Settings ---
         const isMobile = window.innerWidth < 768;
-        const PARTICLE_COUNT = isMobile ? 4000 : 12000;
+        const P_COUNT = isMobile ? 5000 : 15000; // Mobile par particles kam
         const videoElement = document.getElementById('input_video');
-        const statusText = document.getElementById('status');
+        const status = document.getElementById('status');
+        const shapeLabel = document.getElementById('shape_name');
 
-        // 2. Three.js Scene Setup
+        // --- Three.js Setup ---
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 25;
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.z = 30;
 
-        const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: "high-performance" });
+        const renderer = new THREE.WebGLRenderer({ antialias: !isMobile });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.body.appendChild(renderer.domElement);
 
-        // 3. Particles Geometry
+        // --- Particle Geometry ---
         const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(PARTICLE_COUNT * 3);
-        const colors = new Float32Array(PARTICLE_COUNT * 3);
+        const pos = new Float32Array(P_COUNT * 3);
+        const col = new Float32Array(P_COUNT * 3);
 
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-            positions[i*3] = (Math.random() - 0.5) * 40;
-            positions[i*3+1] = (Math.random() - 0.5) * 40;
-            positions[i*3+2] = (Math.random() - 0.5) * 40;
-            colors[i*3] = 0; colors[i*3+1] = 1; colors[i*3+2] = 1;
+        for(let i=0; i<P_COUNT; i++) {
+            pos[i*3] = (Math.random()-0.5)*50;
+            pos[i*3+1] = (Math.random()-0.5)*50;
+            pos[i*3+2] = (Math.random()-0.5)*50;
         }
 
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
-        const material = new THREE.PointsMaterial({
-            size: isMobile ? 0.25 : 0.15,
+        const mat = new THREE.PointsMaterial({
+            size: isMobile ? 0.3 : 0.15,
             vertexColors: true,
-            transparent: true,
             blending: THREE.AdditiveBlending,
+            transparent: true,
             depthWrite: false
         });
 
-        const points = new THREE.Points(geometry, material);
+        const points = new THREE.Points(geometry, mat);
         scene.add(points);
 
-        // 4. Shape Target Buffers (Morphing)
-        const targets = {
-            sphere: Array.from({length: PARTICLE_COUNT}, () => new THREE.Vector3().randomDirection().multiplyScalar(12)),
-            heart: Array.from({length: PARTICLE_COUNT}, () => {
+        // --- Advanced Shapes Generation ---
+        function createShapes() {
+            const s = { sphere: [], heart: [], saturn: [], flower: [] };
+            for(let i=0; i<P_COUNT; i++) {
+                // Sphere
+                s.sphere.push(new THREE.Vector3().randomDirection().multiplyScalar(15));
+                
+                // Heart
                 const t = Math.random() * Math.PI * 2;
-                const x = 16 * Math.pow(Math.sin(t), 3);
-                const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
-                return new THREE.Vector3(x * 0.6, y * 0.6, (Math.random()-0.5)*2);
-            })
-        };
+                s.heart.push(new THREE.Vector3(
+                    8 * Math.pow(Math.sin(t), 3),
+                    6.5 * Math.cos(t) - 2.5 * Math.cos(2*t) - Math.cos(3*t) - 0.5 * Math.cos(4*t),
+                    (Math.random()-0.5)*3
+                ));
 
-        // 5. MediaPipe Hands Logic
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
+                // Saturn
+                if(Math.random() > 0.4) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = 15 + Math.random() * 5;
+                    s.saturn.push(new THREE.Vector3(Math.cos(angle)*r, (Math.random()-0.5)*2, Math.sin(angle)*r));
+                } else {
+                    s.saturn.push(new THREE.Vector3().randomDirection().multiplyScalar(10));
+                }
 
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: isMobile ? 0 : 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
+                // Flower
+                const angle = Math.random() * Math.PI * 2;
+                const r = 10 * Math.sin(5 * angle); // 5 petals
+                s.flower.push(new THREE.Vector3(Math.cos(angle)*r, Math.sin(angle)*r, (Math.random()-0.5)*5));
+            }
+            return s;
+        }
 
-        let handX = 0, handY = 0, isPinching = false;
+        const allShapes = createShapes();
+        const shapeKeys = Object.keys(allShapes);
+        let currentShapeIdx = 0;
 
-        hands.onResults((results) => {
-            statusText.innerText = "Tracking Active ✅";
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const lm = results.multiHandLandmarks[0];
-                // Mirror mapping for front camera
-                handX = (0.5 - lm[8].x) * (isMobile ? 40 : 60);
-                handY = (0.5 - lm[8].y) * 40;
+        // --- AI Tracking ---
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5 });
 
-                const dist = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
-                isPinching = dist < 0.06;
+        let hX=0, hY=0, pinch=false;
+
+        hands.onResults(res => {
+            status.innerText = "Hand Active ✅";
+            if(res.multiHandLandmarks && res.multiHandLandmarks[0]) {
+                const lm = res.multiHandLandmarks[0];
+                hX = (0.5 - lm[8].x) * (isMobile ? 50 : 70);
+                hY = (0.5 - lm[8].y) * 40;
+                pinch = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y) < 0.05;
             }
         });
 
-        // Camera setup for Mobile
-        const cameraUtils = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 480, height: 360,
-            facingMode: 'user' // Force Front Camera
+        const cam = new Camera(videoElement, {
+            onFrame: async() => { await hands.send({image: videoElement}); },
+            width: 480, height: 360, facingMode: 'user'
         });
-        cameraUtils.start().catch(() => {
-            statusText.innerText = "Camera Permission Denied! ❌";
-        });
+        cam.start();
 
-        // 6. Animation Loop
-        let time = 0;
-        function animate() {
-            requestAnimationFrame(animate);
-            time += 0.02;
+        // --- Animation ---
+        let clock = new THREE.Clock();
+        function update() {
+            requestAnimationFrame(update);
+            const time = clock.getElapsedTime();
+            
+            // Auto switch shape every 6 seconds
+            currentShapeIdx = Math.floor(time / 6) % shapeKeys.length;
+            const targetName = shapeKeys[currentShapeIdx];
+            const targetData = allShapes[targetName];
+            shapeLabel.innerText = "Shape: " + targetName.toUpperCase();
+
+            points.position.lerp(new THREE.Vector3(hX, hY, 0), 0.1);
+            points.rotation.y += 0.005;
 
             const posAttr = geometry.attributes.position;
-            const colorAttr = geometry.attributes.color;
-            const activeTarget = (Math.floor(time / 5) % 2 === 0) ? targets.sphere : targets.heart;
+            const colAttr = geometry.attributes.color;
 
-            // Move particle group to hand
-            points.position.lerp(new THREE.Vector3(handX, handY, 0), 0.1);
-            points.rotation.y += 0.01;
+            for(let i=0; i<P_COUNT; i++) {
+                const i3 = i*3;
+                // Morphing Logic
+                posAttr.array[i3] += (targetData[i].x - posAttr.array[i3]) * 0.06;
+                posAttr.array[i3+1] += (targetData[i].y - posAttr.array[i3+1]) * 0.06;
+                posAttr.array[i3+2] += (targetData[i].z - posAttr.array[i3+2]) * 0.06;
 
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const i3 = i * 3;
-                // Morphing
-                posAttr.array[i3] += (activeTarget[i].x - posAttr.array[i3]) * 0.05;
-                posAttr.array[i3+1] += (activeTarget[i].y - posAttr.array[i3+1]) * 0.05;
-                posAttr.array[i3+2] += (activeTarget[i].z - posAttr.array[i3+2]) * 0.05;
-
-                // Color change on pinch
-                if (isPinching) {
-                    colorAttr.array[i3] = 1.0; // Red
-                    colorAttr.array[i3+1] = Math.random(); 
-                    colorAttr.array[i3+2] = 0.2;
+                // Color Logic
+                if(pinch) {
+                    colAttr.array[i3] = Math.sin(time*2) * 0.5 + 0.5;
+                    colAttr.array[i3+1] = 0;
+                    colAttr.array[i3+2] = 1;
                 } else {
-                    colorAttr.array[i3] = 0.2; // Cyan/Blue
-                    colorAttr.array[i3+1] = 0.8;
-                    colorAttr.array[i3+2] = 1.0;
+                    // Hand movement se rang badlega
+                    colAttr.array[i3] = 0.2 + (hX/100);
+                    colAttr.array[i3+1] = 0.8;
+                    colAttr.array[i3+2] = 1.0 - (hY/100);
                 }
             }
 
             posAttr.needsUpdate = true;
-            colorAttr.needsUpdate = true;
+            colAttr.needsUpdate = true;
             renderer.render(scene, camera);
         }
-
-        animate();
+        update();
 
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.aspect = window.innerWidth/window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
 </body>
-</html>
-                const r = 12 + Math.random() * 4;
-                return new THREE.Vector3(Math.cos(angle) * r, Math.sin(angle) * 2, Math.sin(angle) * r);
-            } else {
-                const vec = new THREE.Vector3().randomDirection().multiplyScalar(Math.random() * 8);
-                return vec;
-            }
-        }
-
-
-        function createShapeBuffer(type) {
-            const pts = [];
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                if (type === 0) pts.push(new THREE.Vector3().randomDirection().multiplyScalar(15)); // Sphere
-                if (type === 1) pts.push(getHeartPoint(Math.random() * 2)); // Heart
-                if (type === 2) pts.push(getSaturnPoint()); // Saturn
-            }
-            return pts;
-        }
-
-
-        const shapes = [createShapeBuffer(0), createShapeBuffer(1), createShapeBuffer(2)];
-
-
-        // --- MediaPipe Hand Tracking ---
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-
-        const handTarget = new THREE.Vector3();
-        const videoElement = document.createElement('video');
-
-
-        hands.onResults((results) => {
-            document.getElementById('status').innerText = "AI Tracking Active";
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const lm = results.multiHandLandmarks[0];
-                
-                // Map hand coordinates to 3D space
-                const tx = (0.5 - lm[8].x) * 60;
-                const ty = (0.5 - lm[8].y) * 40;
-                handTarget.set(tx, ty, 0);
-
-
-                // Pinch detection (Index tip to Thumb tip)
-                const dist = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
-                isPinching = dist < 0.05;
-            }
-        });
-
-
-        const cameraTracking = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 640, height: 480
-        });
-        cameraTracking.start();
-
-
-        // --- Animation Loop ---
-        let time = 0;
-        function animate() {
-            requestAnimationFrame(animate);
-            time += 0.01;
-
-
-            // Auto-morph shape every 5 seconds
-            const shapeIdx = Math.floor(Date.now() / 5000) % shapes.length;
-            const targetShape = shapes[shapeIdx];
-
-
-            const posAttr = geometry.attributes.position;
-            const colorAttr = geometry.attributes.color;
-
-
-            // Smoothly move particle system to hand position
-            particleSystem.position.lerp(handTarget, SMOOTHING);
-            particleSystem.rotation.y += 0.005;
-
-
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const i3 = i * 3;
-                
-                // Morph towards target shape
-                posAttr.array[i3] += (targetShape[i].x - posAttr.array[i3]) * 0.05;
-                posAttr.array[i3+1] += (targetShape[i].y - posAttr.array[i3+1]) * 0.05;
-                posAttr.array[i3+2] += (targetShape[i].z - posAttr.array[i3+2]) * 0.05;
-
-
-                // React to pinch (Color shift)
-                if (isPinching) {
-                    colorAttr.array[i3] = Math.sin(time + i * 0.1) * 0.5 + 0.5; // Red channel
-                    colorAttr.array[i3+1] = 0.2;
-                    colorAttr.array[i3+2] = 1.0;
-                } else {
-                    colorAttr.array[i3] = 0.2;
-                    colorAttr.array[i3+1] = 0.8;
-                    colorAttr.array[i3+2] = 1.0;
-                }
-            }
-
-
-            posAttr.needsUpdate = true;
-            colorAttr.needsUpdate = true;
-            renderer.render(scene, camera);
-        }
-
-
-        animate();
-
-
-        // Handle Resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
-</body>
-
 </html>
